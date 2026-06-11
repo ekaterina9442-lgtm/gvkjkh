@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Сбор винограда</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background-color: #2c3e50;
+            color: #fff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start; /* ВАЖНО */
+            min-height: 100vh;
+            margin: 0;
+            overflow: hidden;
+            user-select: none;
+            touch-action: manipulation;
+            padding-bottom: 180px;
+        }
+        h1 { margin: 5px 0; color: #f1c40f; text-shadow: 0 2px 4px rgba(0,0,0,0.5); font-size: 24px; }
+        #ui-panel {
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+            max-width: 500px;
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 5px;
+            background: rgba(0, 0, 0, 0.4);
+            padding: 8px 15px;
+            border-radius: 8px;
+            box-sizing: border-box;
+        }
+        #game-field {
+            position: relative;
+            width: 98vw;
+            height: 60vh;
+            background-image: url('bg.png');
+            background-size: cover;
+            border: 4px solid #1e824c;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            overflow: hidden;
+            margin-bottom: 0;
+            padding-bottom: 220px;
+            box-sizing: border-box;
+        }
+        .game-object {
+            position: absolute;
+            width: clamp(50px, 6vw, 70px);
+            height: clamp(50px, 6vw, 70px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: clamp(35px, 5vw, 55px);
+        }
+        #screen-overlay {
+            display: none;
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.85);
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+            border-radius: 8px;
+        }
+        #screen-overlay h2 { font-size: 28px; margin: 0 0 10px 0; }
+        #final-score { font-size: 22px; color: #2ecc71; margin-bottom: 20px; }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            font-weight: bold;
+            background: #e67e22;
+            color: white;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+        }
+        #controls {
+            position: fixed;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 999;
+    
+            display: grid;
+            grid-template-columns: repeat(3, 70px);
+            grid-template-rows: repeat(2, 70px);
+            gap: 10px;
+            margin-top: 25px;
+
+            z-index: 20;
+        }
+        .btn {
+            background: #34495e;
+            color: white;
+            border: 2px solid #7f8c8d;
+            border-radius: 50%;
+            font-size: 36px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        .btn:active { background: #e67e22; transform: scale(0.95); }
+    </style>
+</head>
+<body>
+    <div style="display: none;">
+        <img src="horse.png">
+        <img src="nadgrobia.png">
+    </div>
+
+    <h1>Сбор винограда 🍇</h1>
+    
+    <div id="ui-panel">
+        <div>⏱️ <span id="timer">30</span>с</div>
+        <div>🍇 <span id="score">0</span></div>
+        <div><span id="lives">❤️❤️❤️</span></div>
+    </div>
+
+    <div id="game-field">
+        <div id="horse" class="game-object" style="left: 230px; top: 180px;">
+            <img src="horse.png" onerror="this.style.display='none'; this.parentElement.innerText='🐎'" style="width: 100%; height: 100%; object-fit: contain;">
+        </div>
+        
+        <div id="screen-overlay">
+            <h2 id="end-title">Игра окончена!</h2>
+            <div id="final-score">Вы успели собрать 0 🍇</div>
+            <button onclick="startGame()">Играть снова</button>
+        </div>
+    </div>
+
+    <div id="controls">
+        <div></div>
+        <div class="btn" id="btn-up">▲</div>
+        <div></div>
+        <div class="btn" id="btn-left">◀</div>
+        <div class="btn" id="btn-down">▼</div>
+        <div class="btn" id="btn-right">▶</div>
+    </div>
+
+<script>
+    const field = document.getElementById('game-field');
+    const OBJECT_SIZE = () => Math.max(50, Math.min(70, window.innerWidth * 0.06));
+    const horse = document.getElementById('horse');
+    const timerEl = document.getElementById('timer');
+    const scoreEl = document.getElementById('score');
+    const livesEl = document.getElementById('lives');
+    const overlay = document.getElementById('screen-overlay');
+    const endTitle = document.getElementById('end-title');
+    const finalScoreEl = document.getElementById('final-score');
+
+    let score = 0;
+    let lives = 3;
+    let timeLeft = 30;
+    let gameActive = false;
+    
+    let horseX = 230;
+    let horseY = 180;
+    const speed = 7;
+
+    let gameInterval, spawnInterval, grapeInterval, loopInterval;
+    let items = [];
+
+    const keys = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false };
+
+    function startGame() {
+        score = 0;
+        lives = 3;
+        timeLeft = 30;
+        horseX = Math.floor(field.clientWidth / 2) - OBJECT_SIZE() / 2;
+        horseY = Math.floor(field.clientHeight / 2) - OBJECT_SIZE() / 2;
+        gameActive = true;
+        
+        scoreEl.innerText = score;
+        timerEl.innerText = timeLeft;
+        livesEl.innerText = "❤️❤️❤️";
+        overlay.style.display = "none";
+        
+        for (let key in keys) keys[key] = false;
+
+        items.forEach(item => item.el.remove());
+        items = [];
+
+        clearInterval(gameInterval);
+        gameInterval = setInterval(() => {
+            timeLeft--;
+            timerEl.innerText = timeLeft;
+            if (timeLeft <= 0) endGame(true);
+        }, 1000);
+
+        clearInterval(spawnInterval);
+        spawnInterval = setInterval(spawnItem, 800);
+
+        clearInterval(grapeInterval);
+        grapeInterval = setInterval(spawnGrape, 300);
+
+        clearInterval(loopInterval);
+        loopInterval = setInterval(updateGame, 1000 / 60);
+    }
+
+    function spawnItem() {
+        if (!gameActive) return;
+
+        const el = document.createElement('div');
+        el.classList.add('game-object');
+
+        const isGrave = Math.random() < 0.4;
+        if (isGrave) {
+            el.innerHTML = `<img src="nadgrobia.png" style="width: 100%; height: 100%; object-fit: contain;">`;
+        } else {
+            el.innerText = '🍇';
+        }
+
+        const maxX = field.clientWidth - OBJECT_SIZE();
+        const maxY = field.clientHeight - OBJECT_SIZE();
+
+        const x = Math.floor(Math.random() * maxX);
+        const y = Math.floor(Math.random() * maxY);
+
+        if (Math.abs(x - horseX) < 45 && Math.abs(y - horseY) < 45) return;
+
+        el.style.left = x + 'px';
+        el.style.top = y + 'px';
+
+        field.appendChild(el);
+
+        items.push({ el, x, y, isGrave });
+
+    setTimeout(() => {
+        if (document.body.contains(el)) {
+            el.remove();
+            items = items.filter(i => i.el !== el);
+           }
+       }, 5000);
+    }
+
+    function spawnGrape() {
+    if (!gameActive) return;
+
+    const el = document.createElement('div');
+    el.classList.add('game-object');
+    el.innerText = '🍇';
+
+    const maxX = field.clientWidth - OBJECT_SIZE();
+    const maxY = field.clientHeight - OBJECT_SIZE();
+
+    const x = Math.floor(Math.random() * maxX);
+    const y = Math.floor(Math.random() * maxY);
+
+    el.style.left = x + 'px';
+    el.style.top = y + 'px';
+
+    field.appendChild(el);
+
+    items.push({ el, x, y, isGrave: false });
+
+    setTimeout(() => {
+        if (document.body.contains(el)) {
+            el.remove();
+            items = items.filter(i => i.el !== el);
+        }
+    }, 5000);
+}
+
+    function updateGame() {
+        if (!gameActive) return;
+
+        let dx = 0;
+        let dy = 0;
+
+        if (keys.ArrowUp) dy = -speed;
+        if (keys.ArrowDown) dy = speed;
+        if (keys.ArrowLeft) dx = -speed;
+        if (keys.ArrowRight) dx = speed;
+
+        if (dx !== 0 || dy !== 0) {
+            const maxX = field.clientWidth - OBJECT_SIZE();
+            const maxY = field.clientHeight - OBJECT_SIZE();
+
+            horseX += dx;
+            horseY += dy;
+
+            if (horseX < 0) horseX = 0;
+            if (horseX > maxX) horseX = maxX;
+            if (horseY < 0) horseY = 0;
+            if (horseY > maxY) horseY = maxY;
+
+            horse.style.left = horseX + 'px';
+            horse.style.top = horseY + 'px';
+
+            checkCollisions();
+        }
+    }
+
+    window.addEventListener('keydown', (e) => {
+        if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].indexOf(e.key) > -1) {
+            e.preventDefault();
+            keys[e.key] = true;
+        }
+    });
+    window.addEventListener('keyup', (e) => {
+        if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].indexOf(e.key) > -1) {
+            keys[e.key] = false;
+        }
+    });
+
+    const setupVirtualButton = (btnId, keyName) => {
+        const btn = document.getElementById(btnId);
+        
+        const startPress = (e) => {
+            e.preventDefault();
+            keys[keyName] = true;
+        };
+        const endPress = (e) => {
+            e.preventDefault();
+            keys[keyName] = false;
+        };
+
+        btn.addEventListener('touchstart', startPress, {passive: false});
+        btn.addEventListener('touchend', endPress);
+        btn.addEventListener('mousedown', startPress);
+        window.addEventListener('mouseup', () => { keys[keyName] = false; });
+    };
+
+    setupVirtualButton('btn-up', 'ArrowUp');
+    setupVirtualButton('btn-down', 'ArrowDown');
+    setupVirtualButton('btn-left', 'ArrowLeft');
+    setupVirtualButton('btn-right', 'ArrowRight');
+
+    function checkCollisions() {
+        items.forEach((item, index) => {
+            const distX = Math.abs(item.x - horseX);
+            const distY = Math.abs(item.y - horseY);
+
+            if (distX < OBJECT_SIZE() * 0.7 &&
+                distY < OBJECT_SIZE() * 0.7) {
+                item.el.remove();
+                items.splice(index, 1);
+
+                if (item.isGrave) {
+                    lives--;
+                    livesEl.innerText = "❤️".repeat(lives);
+                    if (lives <= 0) endGame(false);
+                } else {
+                    score++;
+                    scoreEl.innerText = score;
+                }
+            }
+        });
+    }
+
+    function endGame(e) {
+        gameActive = !1; 
+        clearInterval(gameInterval); 
+        clearInterval(spawnInterval); 
+        clearInterval(loopInterval);
+        
+        endTitle.innerText = e ? "Время вышло!" : "Кончились жизни! 💀";
+
+        // --- БЛОК ТАБЛИЦЫ РЕКОРДОВ ---
+        // 1. Получаем старые рекорды из памяти (или создаем пустой массив, если их еще нет)
+        let history = JSON.parse(localStorage.getItem('grape_scores')) || [];
+        
+        // 2. Добавляем текущий результат в начало списка
+        history.unshift(score);
+        
+        // 3. Оставляем только 5 последних результатов
+        if (history.length > 5) {
+            history = history.slice(0, 5);
+        }
+        
+        // 4. Сохраняем обновленный список обратно в память браузера
+        localStorage.setItem('grape_scores', JSON.stringify(history));
+
+                // 5. Формируем красивый текст для вывода на экран
+        let scoreBoardHtml = 'Вы успели собрать: <b>' + score + '</b> 🍇<br><br>';
+        scoreBoardHtml += '<div style="font-size: 16px; color: #f1c40f; text-align: left; max-width: 200px; margin: 0 auto;">';
+        scoreBoardHtml += '<b>Последние 5 игр:<br>';
+        
+        history.forEach((num, index) => {
+                        scoreBoardHtml += (index + 1) + '. ——— ' + num + ' 🍇<br>';
+        });
+                scoreBoardHtml += '</div>';
+
+        // Добавляем фиолетовую кнопку перехода на винодельню
+        scoreBoardHtml += '<br><button onclick="window.location.href=\'winery.html\'" style="background:#8e44ad; box-shadow:0 0 10px #8e44ad; margin-top:10px;">Перейти на винодельню 🍷</button>';
+
+        // 6. Выводим всё это на темный экран окончания игры
+        finalScoreEl.innerHTML = scoreBoardHtml;
+        overlay.style.display = "flex";
+    }
+
+    startGame();
+</script>
+
+</body>
+</html>

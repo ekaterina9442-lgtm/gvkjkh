@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Винодельня</title>
+    <style>
+        body { font-family: 'Segoe UI', Arial, sans-serif; background-color: #1a1a2e; color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; margin: 0; overflow: hidden; user-select: none; touch-action: manipulation; }
+        h1 { margin: 5px 0; color: #9b59b6; text-shadow: 0 0 10px #8e44ad; font-size: 26px; }
+        p { margin: 0 0 15px 0; color: #a2a2d0; font-size: 14px; text-align: center; max-width: 450px; }
+        #factory-floor { display: flex; justify-content: space-around; align-items: center; width: 95vw; height: 40vh; max-width: 500px; background: rgba(0, 0, 0, 0.4); border: 3px solid #8e44ad; border-radius: 12px; position: relative; box-shadow: 0 0 20px rgba(142, 68, 173, 0.3); }
+        .station { display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; transition: transform 0.2s; -webkit-tap-highlight-color: transparent; }
+        .station:active { transform: scale(0.9); }
+        .icon { font-size: 60px; line-height: 1; margin-bottom: 5px; filter: drop-shadow(0 0 5px rgba(255,255,255,0.1)); }
+        .counter { font-size: 16px; font-weight: bold; background: rgba(0,0,0,0.6); padding: 2px 8px; border-radius: 10px; border: 1px solid #7f8c8d; }
+        #barrel-fill { font-size: 12px; color: #e74c3c; margin-top: 5px; font-weight: bold; }
+        #cellar { width: 95vw; max-width: 500px; height: 15vh; margin-top: 15px; background: #2c3e50; border: 3px solid #34495e; border-radius: 8px; display: flex; flex-direction: column; padding: 5px; box-sizing: border-box; }
+        #cellar-title { font-size: 14px; font-weight: bold; color: #f1c40f; margin-bottom: 5px; text-align: center; }
+        #shelf { display: flex; gap: 8px; overflow-x: auto; height: 100%; align-items: center; padding: 0 10px; background: rgba(0,0,0,0.3); border-radius: 4px; }
+        .wine-bottle { font-size: 35px; animation: pop 0.3s ease-out; }
+        #back-btn { margin-top: 20px; padding: 10px 20px; font-size: 16px; font-weight: bold; background: #34495e; color: white; border: 2px solid #7f8c8d; border-radius: 25px; cursor: pointer; }
+        #back-btn:active { background: #e67e22; border-color: #d35400; }
+        @keyframes pop { 0% { transform: scale(0); } 100% { transform: scale(1); } }
+    </style>
+</head>
+<body>
+    <h1>Винодельня 🍷</h1>
+    <p>Складываем запасы из последних 5 игр. Нажмите на ящик, чтобы выжать сок, а затем на пустую бутылку, чтобы разлить готовое вино!</p>
+    <div id="factory-floor">
+        <div class="station" id="crate-btn" onclick="pressGrapes()">
+            <div class="icon">📥</div>
+            <div class="counter">🍇 <span id="grape-count">0</span></div>
+        </div>
+        <div class="station" style="cursor: default;" id="barrel-station">
+            <div class="icon" id="barrel-icon">🛢️</div>
+            <div id="barrel-fill">Заполнено: 0/10</div>
+        </div>
+        <div class="station" id="bottle-btn" onclick="fillBottle()">
+            <div class="icon">🍾</div>
+            <div class="counter">Пустые</div>
+        </div>
+    </div>
+    <div id="cellar">
+        <div id="cellar-title">Погреб готовой продукции (Всего: <span id="total-wine">0</span> шт)</div>
+        <div id="shelf"></div>
+    </div>
+    <button id="back-btn" onclick="window.location.href='index.html'">Вернуться к лошадке 🐎</button>
+<script>
+    const grapeCountEl = document.getElementById('grape-count');
+    const barrelFillEl = document.getElementById('barrel-fill');
+    const barrelIcon = document.getElementById('barrel-icon');
+    const totalWineEl = document.getElementById('total-wine');
+    const shelf = document.getElementById('shelf');
+
+    let totalGrapes = 0;
+    let barrelJuice = 0;
+    let totalWineBottles = parseInt(localStorage.getItem('total_wine_bottles')) || 0;
+
+    // Считаем сумму винограда из последних 5 игр
+    function calculateGrapes() {
+        let history = JSON.parse(localStorage.getItem('grape_scores')) || [];
+        totalGrapes = history.reduce((sum, current) => sum + current, 0);
+        
+        // Вычитаем уже потраченный виноград, который пошел на вино
+        let spentGrapes = parseInt(localStorage.getItem('spent_grapes_count')) || 0;
+        totalGrapes = Math.max(0, totalGrapes - spentGrapes);
+        
+        grapeCountEl.innerText = totalGrapes;
+    }
+
+    // Нажатие на ящик: отправляем виноград в бочку
+    function pressGrapes() {
+        if (totalGrapes <= 0) {
+            alert('У вас закончился собранный виноград! Вернитесь в игру и соберите еще 🍇');
+            return;
+        }
+        if (barrelJuice >= 10) {
+            alert('Бочка уже полная! Сначала разлейте вино по бутылкам 🍾');
+            return;
+        }
+
+        totalGrapes--;
+        barrelJuice++;
+        
+        // Записываем потраченную гроздь в память
+        let spentGrapes = parseInt(localStorage.getItem('spent_grapes_count')) || 0;
+        localStorage.setItem('spent_grapes_count', spentGrapes + 1);
+
+        updateUi();
+    }
+
+    // Нажатие на бутылку: разливаем вино, если накопилось 10 гроздей
+    function fillBottle() {
+        if (barrelJuice < 10) {
+            alert('В бочке недостаточно виноградного сока! Нужно выжать ровно 10 гроздей 🍇');
+            return;
+        }
+
+        barrelJuice = 0;
+        totalWineBottles++;
+        
+        localStorage.setItem('total_wine_bottles', totalWineBottles);
+
+        updateUi();
+        addBottleToShelf();
+    }
+
+    function updateUi() {
+        grapeCountEl.innerText = totalGrapes;
+        barrelFillEl.innerText = `Заполнено: ${barrelJuice}/10`;
+        totalWineEl.innerText = totalWineBottles;
+
+        // Визуально меняем бочку, когда она заполнена соком
+        if (barrelJuice === 10) {
+            barrelIcon.innerText = '🍷';
+            barrelFillEl.style.color = '#2ecc71';
+            barrelFillEl.innerText = 'ГОТОВО К РОЗЛИВУ!';
+        } else {
+            barrelIcon.innerText = '🛢️';
+            barrelFillEl.style.color = '#e74c3c';
+        }
+    }
+
+    function addBottleToShelf() {
+        const bottle = document.createElement('div');
+        bottle.classList.add('wine-bottle');
+        bottle.innerText = '🍷';
+        shelf.appendChild(bottle);
+        // Прокручиваем полку в конец, чтобы видеть новые бутылки
+        shelf.scrollLeft = shelf.scrollWidth;
+    }
+
+    // Инициализация при запуске страницы
+    calculateGrapes();
+    updateUi();
+    
+    // Отрисовываем уже имеющиеся бутылки из памяти в погребе
+    for (let i = 0; i < totalWineBottles; i++) {
+        const bottle = document.createElement('div');
+        bottle.classList.add('wine-bottle');
+        bottle.innerText = '🍷';
+        shelf.appendChild(bottle);
+    }
+</script>
+</body>
+</html>
